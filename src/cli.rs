@@ -1,4 +1,4 @@
-use std::{fs::create_dir_all, path::PathBuf};
+use std::{fs::create_dir_all, io::ErrorKind, path::PathBuf};
 
 use mingling::{
     AnyOutput, Groupped,
@@ -13,6 +13,7 @@ use crate::{
     bill::{BillItem, Bills, SplitResult},
     calc::calculate_from,
     display::SimpleTable,
+    edit::{get_default_editor, input_with_editor_cutsom},
     error::BillSplitError,
     string_vec,
 };
@@ -30,9 +31,16 @@ pub async fn entry() {
     program.with_dispatchers((
         ClearAllBillCommand,
         AddBillCommand,
-        // RenameMemberCommand,
-        // RenameBillCommand,
+        EditCommand,
         ListAllBillCommand,
+    ));
+
+    program.with_dispatchers((
+        EditWithViCommand,
+        EditWithVimCommand,
+        EditWithNvimCommand,
+        EditWithHelixCommand,
+        EditWithNanoCommand,
     ));
 
     // Execute
@@ -41,8 +49,7 @@ pub async fn entry() {
 
 dispatcher!("clear", ClearAllBillCommand => ClearAllBillEntry);
 dispatcher!("add", AddBillCommand => AddBillEntry);
-// dispatcher!("rename.member", RenameMemberCommand => RenameMemberEntry);
-// dispatcher!("rename.bill", RenameBillCommand => RenameBillEntry);
+dispatcher!("edit", EditCommand => EditEntry);
 dispatcher!("ls", ListAllBillCommand => ListAllBillEntry);
 
 #[chain]
@@ -129,34 +136,54 @@ async fn handle_list_bills(prev: StateListBills) -> NextProcess {
 
 #[renderer]
 fn render_bills(prev: ResultBills) {
-    let mut table = SimpleTable::new(string_vec!["Who", "|", "Paid", "|", "Split", "|", "Reason"]);
-    for (_, items) in prev.inner.items {
-        let split = items
-            .split
-            .iter()
-            .map(|i| i.to_string())
-            .collect::<Vec<String>>()
-            .join(", ");
-        table.push_item(string_vec![
-            items.who_paid,
-            "",
-            items.paid,
-            "",
-            split,
-            "",
-            items.reason
-        ]);
-    }
-    r_println!("{}", table)
+    r_println!("{}", prev.inner.table())
 }
 
 #[renderer]
 fn render_split_result(prev: ResultSplitResult) {
     let mut table = SimpleTable::new(string_vec!["Who", "|", "Should Pay", "|", "To"]);
     for ((who, to), paid) in prev.inner.final_result {
-        table.push_item(string_vec![who, "", paid, "", to]);
+        table.push_item(string_vec![who, "|", paid, "|", to]);
     }
     r_println!("{}", table)
+}
+
+pack!(StateEditBills = String); // Editor name
+pack!(ErrorEditorNotFound = String);
+
+#[chain]
+async fn parse_edit_cmd(prev: EditEntry) -> NextProcess {
+    let editor = Picker::<()>::new(prev.inner)
+        .pick_or::<String>(["--editor", "-e"], get_default_editor())
+        .unpack_directly()
+        .0;
+    let state = StateEditBills::new(editor);
+    AnyOutput::new(state).route_chain()
+}
+
+#[chain]
+async fn exec_edit_cmd(prev: StateEditBills) -> NextProcess {
+    let text = match input_with_editor_cutsom(
+        read_bills().table(),
+        state_edit_file_path(),
+        "#",
+        prev.inner.clone(),
+    ) {
+        Ok(v) => v,
+        Err(e) => match e.kind() {
+            ErrorKind::NotFound => {
+                return AnyOutput::new(ErrorEditorNotFound::new(prev.inner)).route_renderer();
+            }
+            _ => panic!("Error editing bills: {}", e),
+        },
+    };
+    write_bills(Bills::from_table_str(text));
+    Empty::new(()).to_render()
+}
+
+#[renderer]
+fn render_error_editor_not_found(prev: ErrorEditorNotFound) {
+    r_println!("Error: Editor \"{}\" not found", prev.inner);
 }
 
 #[renderer]
@@ -200,6 +227,10 @@ fn state_file_path() -> PathBuf {
     cobill_dir().join("state.yml")
 }
 
+fn state_edit_file_path() -> PathBuf {
+    cobill_dir().join("edit.state.md")
+}
+
 fn read_bills() -> Bills {
     let dir = cobill_dir();
     create_dir_all(dir).unwrap();
@@ -218,12 +249,47 @@ fn read_bills() -> Bills {
     }
 }
 
-fn op_bills<F: FnOnce(&mut Bills)>(op: F) {
-    let mut bills = read_bills();
-    op(&mut bills);
+fn write_bills(bills: Bills) {
     let state_file = state_file_path();
     let contents = serde_yaml::to_string(&bills).unwrap();
     std::fs::write(state_file, contents).unwrap();
+}
+
+fn op_bills<F: FnOnce(&mut Bills)>(op: F) {
+    let mut bills = read_bills();
+    op(&mut bills);
+    write_bills(bills);
+}
+
+dispatcher!("vi", EditWithViCommand => EditWithViEntry);
+dispatcher!("vim", EditWithVimCommand => EditWithVimEntry);
+dispatcher!("nvim", EditWithNvimCommand => EditWithNvimEntry);
+dispatcher!("helix", EditWithHelixCommand => EditWithHelixEntry);
+dispatcher!("nano", EditWithNanoCommand => EditWithNanoEntry);
+
+#[chain]
+async fn edit_with_vi(_prev: EditWithViEntry) -> NextProcess {
+    EditEntry::new(string_vec!["-e", "vi"]).to_chain()
+}
+
+#[chain]
+async fn edit_with_vim(_prev: EditWithVimEntry) -> NextProcess {
+    EditEntry::new(string_vec!["-e", "vim"]).to_chain()
+}
+
+#[chain]
+async fn edit_with_nvim(_prev: EditWithNvimEntry) -> NextProcess {
+    EditEntry::new(string_vec!["-e", "nvim"]).to_chain()
+}
+
+#[chain]
+async fn edit_with_helix(_prev: EditWithHelixEntry) -> NextProcess {
+    EditEntry::new(string_vec!["-e", "helix"]).to_chain()
+}
+
+#[chain]
+async fn edit_with_nano(_prev: EditWithNanoEntry) -> NextProcess {
+    EditEntry::new(string_vec!["-e", "nano"]).to_chain()
 }
 
 gen_program!();

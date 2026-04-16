@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::who::Who;
+use crate::{display::SimpleTable, string_vec, who::Who};
 
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct Bills {
@@ -167,5 +167,72 @@ impl SplitResult {
     /// Get a specific item from the simplified result (who pays whom, returns Option<f64>)
     pub fn get_final_result_item(&self, payer: Who, payee: Who) -> Option<f64> {
         self.final_result.get(&(payer, payee)).copied()
+    }
+}
+
+impl Bills {
+    pub fn table(self) -> String {
+        let mut table = SimpleTable::new(string_vec![
+            "#", "Who", "|", "Paid", "|", "Split", "|", "Reason"
+        ]);
+        let mut items: Vec<_> = self.items.into_iter().collect();
+        items.sort_by(|a, b| {
+            b.1.paid
+                .partial_cmp(&a.1.paid)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+        for (_, items) in items {
+            let split = items
+                .split
+                .iter()
+                .map(|i| i.to_string())
+                .collect::<Vec<String>>()
+                .join(", ");
+            table.push_item(string_vec![
+                "",
+                items.who_paid,
+                "|",
+                items.paid,
+                "|",
+                split,
+                "|",
+                items.reason
+            ]);
+        }
+        table.to_string()
+    }
+
+    pub fn from_table_str(table_str: impl Into<String>) -> Bills {
+        let mut bills = Bills::default();
+        let table_str = table_str.into();
+
+        for line in table_str.lines() {
+            let line = line.trim();
+            if line.is_empty() || line.starts_with('#') {
+                continue;
+            }
+
+            let parts: Vec<&str> = line.split('|').map(|s| s.trim()).collect();
+            if parts.len() != 4 {
+                continue;
+            }
+
+            let who_paid = parts[0];
+            let paid_str = parts[1];
+            let split_str = parts[2];
+            let reason = parts[3];
+
+            let paid = paid_str.parse::<f64>().unwrap_or(0.0);
+
+            let split: Vec<&str> = split_str
+                .split(',')
+                .map(|s| s.trim())
+                .filter(|s| !s.is_empty())
+                .collect();
+
+            bills.add_bill(who_paid, reason, paid, split);
+        }
+
+        bills
     }
 }
