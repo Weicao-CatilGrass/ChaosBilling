@@ -1,0 +1,167 @@
+use std::collections::BTreeMap;
+
+use uuid::Uuid;
+
+use crate::who::Who;
+
+#[derive(Default)]
+pub struct Bills {
+    pub items: BTreeMap<Uuid, BillItem>,
+}
+
+pub struct BillItem {
+    pub who_paid: Who,
+    pub reason: String,
+    pub paid: f64,
+    pub split: Vec<Who>,
+}
+
+pub struct SplitResult {
+    pub items: BTreeMap<Who, Vec<SplitResultItem>>,
+    pub final_result: BTreeMap<(Who, Who), f64>,
+}
+
+pub struct SplitResultItem {
+    pub payee: Who,
+    pub bill: f64,
+    pub reason: String,
+}
+
+impl Bills {
+    /// Add a new bill item
+    pub fn add_bill(&mut self, who_paid: &str, reason: &str, paid: f64, split: Vec<&str>) -> Uuid {
+        let item = BillItem {
+            who_paid: who_paid.into(),
+            reason: reason.to_string(),
+            paid,
+            split: split.into_iter().map(|s| s.into()).collect(),
+        };
+        self.add_item(item)
+    }
+
+    /// Add a new bill item
+    pub fn add_item(&mut self, item: BillItem) -> Uuid {
+        let id = Uuid::new_v4();
+        self.items.insert(id, item);
+        id
+    }
+
+    /// Get a bill item by ID (immutable reference)
+    pub fn get_item(&self, id: &Uuid) -> Option<&BillItem> {
+        self.items.get(id)
+    }
+
+    /// Get a bill item by ID (mutable reference)
+    pub fn get_item_mut(&mut self, id: &Uuid) -> Option<&mut BillItem> {
+        self.items.get_mut(id)
+    }
+
+    /// Update the bill item with the specified ID
+    pub fn update_item(&mut self, id: &Uuid, item: BillItem) -> bool {
+        if self.items.contains_key(id) {
+            self.items.insert(*id, item);
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Delete the bill item with the specified ID
+    pub fn delete_item(&mut self, id: &Uuid) -> Option<BillItem> {
+        self.items.remove(id)
+    }
+
+    /// Get all bill items
+    pub fn get_all_items(&self) -> &BTreeMap<Uuid, BillItem> {
+        &self.items
+    }
+
+    /// Check if a bill item with the specified ID exists
+    pub fn contains_item(&self, id: &Uuid) -> bool {
+        self.items.contains_key(id)
+    }
+
+    /// Clear all bill items
+    pub fn clear_items(&mut self) {
+        self.items.clear();
+    }
+}
+
+impl SplitResult {
+    /// Add a bill (who pays whom, amount, reason)
+    pub fn add_bill(&mut self, payer: Who, payee: Who, amount: f64, reason: String) {
+        let result_item = SplitResultItem {
+            payee,
+            bill: amount,
+            reason,
+        };
+
+        self.items
+            .entry(payer)
+            .or_insert_with(Vec::new)
+            .push(result_item);
+    }
+
+    /// Get all bill items for a specified payer (immutable reference)
+    pub fn get_bills(&self, payer: &Who) -> Option<&Vec<SplitResultItem>> {
+        self.items.get(payer)
+    }
+
+    /// Get all bill items for a specified payer (mutable reference)
+    pub fn get_bills_mut(&mut self, payer: &Who) -> Option<&mut Vec<SplitResultItem>> {
+        self.items.get_mut(payer)
+    }
+
+    /// Update the bill list for a specified payer
+    pub fn update_bills(
+        &mut self,
+        payer: Who,
+        bills: Vec<SplitResultItem>,
+    ) -> Option<Vec<SplitResultItem>> {
+        self.items.insert(payer, bills)
+    }
+
+    /// Delete all bill items for a specified payer
+    pub fn delete_bills(&mut self, payer: &Who) -> Option<Vec<SplitResultItem>> {
+        self.items.remove(payer)
+    }
+
+    /// Get all bill items for all payers
+    pub fn get_all_bills(&self) -> &BTreeMap<Who, Vec<SplitResultItem>> {
+        &self.items
+    }
+
+    /// Check if bill items exist for a specified payer
+    pub fn contains_payer(&self, payer: &Who) -> bool {
+        self.items.contains_key(payer)
+    }
+
+    /// Clear all bill items
+    pub fn clear_bills(&mut self) {
+        self.items.clear();
+    }
+    /// Set the simplified result
+    pub fn set_final_result(&mut self, result: BTreeMap<(Who, Who), f64>) {
+        self.final_result = result;
+    }
+
+    /// Get the simplified result (immutable reference)
+    pub fn get_final_result(&self) -> &BTreeMap<(Who, Who), f64> {
+        &self.final_result
+    }
+
+    /// Get the simplified result (mutable reference)
+    pub fn get_final_result_mut(&mut self) -> &mut BTreeMap<(Who, Who), f64> {
+        &mut self.final_result
+    }
+
+    /// Clear the simplified result
+    pub fn clear_final_result(&mut self) {
+        self.final_result.clear();
+    }
+
+    /// Get a specific item from the simplified result (who pays whom, returns Option<f64>)
+    pub fn get_final_result_item(&self, payer: Who, payee: Who) -> Option<f64> {
+        self.final_result.get(&(payer, payee)).copied()
+    }
+}

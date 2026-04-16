@@ -1,0 +1,22 @@
+[package]
+name = "cobill" # chaos_billing
+version = "0.1.0"
+edition = "2024"
+
+[[bin]]
+name = "cobill"
+path = "src/main.rs"
+
+[dependencies]
+mingling = { path = "../mingling/mingling", features = ["full"] }
+
+tokio = { version = "1", features = ["macros", "rt", "rt-multi-thread" ] }
+
+uuid = { version = "1", features = ["v4"] }
+
+serde = { version = "1", features = ["derive"] }
+
+thiserror = "1.0.69"
+
+[build-dependencies]
+mingling = { path = "../mingling/mingling", features = ["comp"] }
