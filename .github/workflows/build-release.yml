@@ -25,11 +25,29 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Checkout mingling dependency
+        uses: actions/checkout@v4
+        with:
+          repository: CatilGrass/mingling
+          path: mingling
+          ref: main
+
+      - name: Setup workspace structure
+        shell: bash
+        run: |
+          mv mingling ..
+
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: stable
           targets: ${{ matrix.target }}
+
+      - name: Install musl-tools for linux-musl target
+        if: matrix.target == 'x86_64-unknown-linux-musl'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y musl-tools
 
       - name: Cache cargo dependencies
         uses: actions/cache@v4
@@ -46,35 +64,43 @@ jobs:
         run: cargo build --release --target ${{ matrix.target }}
         env:
           CARGO_TARGET_DIR: target
+          CARGO_NET_GIT_FETCH_WITH_CLI: true
 
-      - name: Prepare artifacts
+      - name: Prepare artifacts and create archives
         shell: bash
         run: |
-          mkdir -p artifacts/${{ matrix.artifact_name }}
+          mkdir -p artifacts
 
           if [ "${{ matrix.os }}" = "windows-latest" ]; then
             # Windows artifacts
-            cp target/${{ matrix.target }}/release/cobill.exe artifacts/${{ matrix.artifact_name }}/ || true
-            cp target/${{ matrix.target }}/release/cobill_comp.ps1 artifacts/${{ matrix.artifact_name }}/ || true
+            mkdir -p cobill-windows
+            cp target/${{ matrix.target }}/release/cobill.exe cobill-windows/ || true
+            cp target/${{ matrix.target }}/release/cobill_comp.ps1 cobill-windows/ || true
+            # Install zip on Windows runner
+            choco install zip -y
+            zip -r artifacts/cobill-windows.zip cobill-windows/
           else
             # Linux artifacts
-            cp target/${{ matrix.target }}/release/cobill artifacts/${{ matrix.artifact_name }}/ || true
-            cp target/${{ matrix.target }}/release/cobill_comp.sh artifacts/${{ matrix.artifact_name }}/ || true
-            cp target/${{ matrix.target }}/release/cobill_comp.zsh artifacts/${{ matrix.artifact_name }}/ || true
-            cp target/${{ matrix.target }}/release/cobill_comp.fish artifacts/${{ matrix.artifact_name }}/ || true
+            mkdir -p cobill-${{ matrix.artifact_name }}
+            cp target/${{ matrix.target }}/release/cobill cobill-${{ matrix.artifact_name }}/ || true
+            cp target/${{ matrix.target }}/release/cobill_comp.sh cobill-${{ matrix.artifact_name }}/ || true
+            cp target/${{ matrix.target }}/release/cobill_comp.zsh cobill-${{ matrix.artifact_name }}/ || true
+            cp target/${{ matrix.target }}/release/cobill_comp.fish cobill-${{ matrix.artifact_name }}/ || true
 
             # Make Linux binaries executable
-            chmod +x artifacts/${{ matrix.artifact_name }}/cobill || true
-            chmod +x artifacts/${{ matrix.artifact_name }}/cobill_comp.sh || true
-            chmod +x artifacts/${{ matrix.artifact_name }}/cobill_comp.zsh || true
-            chmod +x artifacts/${{ matrix.artifact_name }}/cobill_comp.fish || true
+            chmod +x cobill-${{ matrix.artifact_name }}/cobill || true
+            chmod +x cobill-${{ matrix.artifact_name }}/cobill_comp.sh || true
+            chmod +x cobill-${{ matrix.artifact_name }}/cobill_comp.zsh || true
+            chmod +x cobill-${{ matrix.artifact_name }}/cobill_comp.fish || true
+
+            tar -czf artifacts/cobill-${{ matrix.artifact_name }}.tar.gz cobill-${{ matrix.artifact_name }}/
           fi
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.artifact_name }}-binaries
-          path: artifacts/${{ matrix.artifact_name }}/
+          name: ${{ matrix.artifact_name }}-archives
+          path: artifacts/cobill-*
           retention-days: 7
 
   release:
@@ -85,24 +111,59 @@ jobs:
       contents: write
 
     steps:
+      - name: Checkout cobill repository
+        uses: actions/checkout@v4
+        with:
+          path: cobill
+
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
           path: artifacts
 
+      - name: Read version from Cargo.toml
+        id: version
+        run: |
+          if [ -f "cobill/Cargo.toml" ]; then
+            VERSION=$(grep -m1 '^version =' cobill/Cargo.toml | cut -d'"' -f2)
+            echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+          else
+            echo "VERSION=unknown" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Read CHANGELOG.md
+        id: changelog
+        run: |
+          if [ -f "cobill/CHANGELOG.md" ]; then
+            # Get current date in YYYY-MM-DD format
+            RELEASE_DATE=$(date -u '+%Y-%m-%d')
+            # Read the changelog file from the cobill checkout
+            CHANGELOG_CONTENT=$(cat cobill/CHANGELOG.md)
+            # Prepend release date header
+            echo "Release ($RELEASE_DATE)" > release_body.txt
+            echo "" >> release_body.txt
+            echo "$CHANGELOG_CONTENT" >> release_body.txt
+            # Append commit SHA
+            echo "" >> release_body.txt
+            echo "Commit: ${{ github.sha }}" >> release_body.txt
+          else
+            # Fallback if CHANGELOG.md doesn't exist
+            echo "Release ($(date -u '+%Y-%m-%d'))" > release_body.txt
+            echo "" >> release_body.txt
+            echo "Automated release from master branch" >> release_body.txt
+            echo "" >> release_body.txt
+            echo "Commit: ${{ github.sha }}" >> release_body.txt
+          fi
+
       - name: Create release
         uses: softprops/action-gh-release@v1
         with:
           files: |
-            artifacts/linux/*
-            artifacts/linux-musl/*
-            artifacts/windows/*
-          tag_name: v${{ github.run_number }}
-          name: Release v${{ github.run_number }}
-          body: |
-            Automated release from master branch
-
-            Build number: ${{ github.run_number }}
-            Commit: ${{ github.sha }}
+            artifacts/linux-archives/cobill-linux.tar.gz
+            artifacts/linux-musl-archives/cobill-linux-musl.tar.gz
+            artifacts/windows-archives/cobill-windows.zip
+          tag_name: v${{ steps.version.outputs.VERSION }}
+          name: Release v${{ steps.version.outputs.VERSION }}
+          body_path: release_body.txt
           draft: false
           prerelease: false
