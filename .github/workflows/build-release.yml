@@ -1,0 +1,108 @@
+name: Build and Release
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            artifact_name: linux
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-musl
+            artifact_name: linux-musl
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            artifact_name: windows
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+          targets: ${{ matrix.target }}
+
+      - name: Cache cargo dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Build for target
+        run: cargo build --release --target ${{ matrix.target }}
+        env:
+          CARGO_TARGET_DIR: target
+
+      - name: Prepare artifacts
+        shell: bash
+        run: |
+          mkdir -p artifacts/${{ matrix.artifact_name }}
+
+          if [ "${{ matrix.os }}" = "windows-latest" ]; then
+            # Windows artifacts
+            cp target/${{ matrix.target }}/release/cobill.exe artifacts/${{ matrix.artifact_name }}/ || true
+            cp target/${{ matrix.target }}/release/cobill_comp.ps1 artifacts/${{ matrix.artifact_name }}/ || true
+          else
+            # Linux artifacts
+            cp target/${{ matrix.target }}/release/cobill artifacts/${{ matrix.artifact_name }}/ || true
+            cp target/${{ matrix.target }}/release/cobill_comp.sh artifacts/${{ matrix.artifact_name }}/ || true
+            cp target/${{ matrix.target }}/release/cobill_comp.zsh artifacts/${{ matrix.artifact_name }}/ || true
+            cp target/${{ matrix.target }}/release/cobill_comp.fish artifacts/${{ matrix.artifact_name }}/ || true
+
+            # Make Linux binaries executable
+            chmod +x artifacts/${{ matrix.artifact_name }}/cobill || true
+            chmod +x artifacts/${{ matrix.artifact_name }}/cobill_comp.sh || true
+            chmod +x artifacts/${{ matrix.artifact_name }}/cobill_comp.zsh || true
+            chmod +x artifacts/${{ matrix.artifact_name }}/cobill_comp.fish || true
+          fi
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}-binaries
+          path: artifacts/${{ matrix.artifact_name }}/
+          retention-days: 7
+
+  release:
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Create release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            artifacts/linux/*
+            artifacts/linux-musl/*
+            artifacts/windows/*
+          tag_name: v${{ github.run_number }}
+          name: Release v${{ github.run_number }}
+          body: |
+            Automated release from master branch
+
+            Build number: ${{ github.run_number }}
+            Commit: ${{ github.sha }}
+          draft: false
+          prerelease: false
