@@ -1,4 +1,4 @@
-use std::{fs::create_dir_all, io::ErrorKind, path::PathBuf};
+use std::{fs::create_dir_all, io::ErrorKind, path::PathBuf, process::exit};
 
 use mingling::{
     AnyOutput, Groupped, ShellContext, Suggest, SuggestItem,
@@ -20,6 +20,16 @@ use crate::{
 
 pub async fn entry() {
     let mut program = ThisProgram::new();
+
+    if program.pick_global_flag(["-v", "--version"]) {
+        println!("{}", include_str!("../version.txt").trim());
+        exit(0)
+    }
+
+    if program.pick_global_flag(["-h", "--help"]) {
+        println!("{}", include_str!("../help.txt").trim());
+        exit(0)
+    }
 
     // Add Completion
     program.with_dispatcher(CompletionDispatcher);

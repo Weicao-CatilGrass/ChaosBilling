@@ -1,0 +1,27 @@
+Chaos Billing (cobill) - A CLI bill splitting tool
+
+SYNOPSIS
+    cobill [--help | --version]
+    cobill <command> [<args>]
+
+COMMANDS
+    add     Add a new bill item
+    clear   Clear all bill items
+    edit    Edit bills using a text editor
+    ls      List all bills or show optimized split result
+
+EDITOR SHORTCUTS
+    vi      Edit bills with vi
+    vim     Edit bills with vim
+    nvim    Edit bills with neovim
+    helix   Edit bills with helix
+    nano    Edit bills with nano
+
+EXAMPLES
+    cobill add -p 100 -r "Dinner" -f Alice Bob
+    cobill ls --optimize
+    cobill edit
+    cobill clear
+
+SEE ALSO
+    For detailed help, run `cobill --help`
