@@ -1,14 +1,16 @@
 use std::collections::BTreeMap;
 
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::who::Who;
 
-#[derive(Default)]
+#[derive(Debug, Default, Serialize, Deserialize)]
 pub struct Bills {
-    pub items: BTreeMap<Uuid, BillItem>,
+    pub items: BTreeMap<String, BillItem>,
 }
 
+#[derive(Debug, Default, Serialize, Deserialize)]
 pub struct BillItem {
     pub who_paid: Who,
     pub reason: String,
@@ -16,11 +18,13 @@ pub struct BillItem {
     pub split: Vec<Who>,
 }
 
+#[derive(Debug, Default, Serialize, Deserialize)]
 pub struct SplitResult {
     pub items: BTreeMap<Who, Vec<SplitResultItem>>,
     pub final_result: BTreeMap<(Who, Who), f64>,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
 pub struct SplitResultItem {
     pub payee: Who,
     pub bill: f64,
@@ -42,24 +46,24 @@ impl Bills {
     /// Add a new bill item
     pub fn add_item(&mut self, item: BillItem) -> Uuid {
         let id = Uuid::new_v4();
-        self.items.insert(id, item);
+        self.items.insert(id.to_string(), item);
         id
     }
 
     /// Get a bill item by ID (immutable reference)
     pub fn get_item(&self, id: &Uuid) -> Option<&BillItem> {
-        self.items.get(id)
+        self.items.get(&id.to_string())
     }
 
     /// Get a bill item by ID (mutable reference)
     pub fn get_item_mut(&mut self, id: &Uuid) -> Option<&mut BillItem> {
-        self.items.get_mut(id)
+        self.items.get_mut(&id.to_string())
     }
 
     /// Update the bill item with the specified ID
     pub fn update_item(&mut self, id: &Uuid, item: BillItem) -> bool {
-        if self.items.contains_key(id) {
-            self.items.insert(*id, item);
+        if self.items.contains_key(&id.to_string()) {
+            self.items.insert(id.to_string(), item);
             true
         } else {
             false
@@ -68,17 +72,17 @@ impl Bills {
 
     /// Delete the bill item with the specified ID
     pub fn delete_item(&mut self, id: &Uuid) -> Option<BillItem> {
-        self.items.remove(id)
+        self.items.remove(&id.to_string())
     }
 
     /// Get all bill items
-    pub fn get_all_items(&self) -> &BTreeMap<Uuid, BillItem> {
+    pub fn get_all_items(&self) -> &BTreeMap<String, BillItem> {
         &self.items
     }
 
     /// Check if a bill item with the specified ID exists
     pub fn contains_item(&self, id: &Uuid) -> bool {
-        self.items.contains_key(id)
+        self.items.contains_key(&id.to_string())
     }
 
     /// Clear all bill items
