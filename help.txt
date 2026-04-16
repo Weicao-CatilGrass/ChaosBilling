@@ -6,6 +6,7 @@ SYNOPSIS
 
 COMMANDS
     add     Add a new bill item
+    cat     Output the content of bills
     clear   Clear all bill items
     edit    Edit bills using a text editor
     ls      List all bills or show optimized split result

@@ -40,6 +40,7 @@ pub async fn entry() {
     // Add Dispatchers
     program.with_dispatchers((
         ClearAllBillCommand,
+        CatCommand,
         AddBillCommand,
         EditCommand,
         ListAllBillCommand,
@@ -58,6 +59,7 @@ pub async fn entry() {
 }
 
 dispatcher!("clear", ClearAllBillCommand => ClearAllBillEntry);
+dispatcher!("cat", CatCommand => CatEntry);
 dispatcher!("add", AddBillCommand => AddBillEntry);
 dispatcher!("edit", EditCommand => EditEntry);
 dispatcher!("ls", ListAllBillCommand => ListAllBillEntry);
@@ -157,6 +159,18 @@ fn comp_edit(ctx: &ShellContext) -> Suggest {
 async fn do_clear_cmd(_prev: ClearAllBillEntry) -> NextProcess {
     op_bills(|b| b.clear_items());
     Empty::new(()).to_render()
+}
+
+pack!(ResultCat = String);
+
+#[chain]
+async fn read_cat_cmd(_prev: CatEntry) -> NextProcess {
+    ResultCat::new(read_bills().table()).to_render()
+}
+
+#[renderer]
+fn render_cat_result(prev: ResultCat) {
+    r_println!("{}", prev.inner.trim())
 }
 
 pack!(StateAddBillItem = BillItem);
@@ -391,6 +405,11 @@ async fn edit_with_helix(_prev: EditWithHelixEntry) -> NextProcess {
 #[chain]
 async fn edit_with_nano(_prev: EditWithNanoEntry) -> NextProcess {
     EditEntry::new(string_vec!["-e", "nano"]).to_chain()
+}
+
+#[renderer]
+fn fallback_dispatcher_not_found(prev: DispatcherNotFound) {
+    r_println!("Error: Unknown command \"{}\"", prev.inner.join(" "));
 }
 
 gen_program!();
