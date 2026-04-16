@@ -235,4 +235,19 @@ impl Bills {
 
         bills
     }
+
+    pub fn get_members(&self) -> Vec<String> {
+        let mut members = std::collections::HashSet::new();
+
+        for item in self.items.values() {
+            members.insert(item.who_paid.to_string());
+            for who in &item.split {
+                members.insert(who.to_string());
+            }
+        }
+
+        let mut result: Vec<String> = members.into_iter().collect();
+        result.sort();
+        result
+    }
 }

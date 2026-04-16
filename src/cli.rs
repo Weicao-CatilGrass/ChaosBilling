@@ -1,8 +1,8 @@
 use std::{fs::create_dir_all, io::ErrorKind, path::PathBuf};
 
 use mingling::{
-    AnyOutput, Groupped,
-    macros::{chain, dispatcher, gen_program, pack, r_println, renderer},
+    AnyOutput, Groupped, ShellContext, Suggest, SuggestItem,
+    macros::{chain, completion, dispatcher, gen_program, pack, r_println, renderer, suggest},
     marker::NextProcess,
     parser::Picker,
     setup::GeneralRendererSetup,
@@ -51,6 +51,97 @@ dispatcher!("clear", ClearAllBillCommand => ClearAllBillEntry);
 dispatcher!("add", AddBillCommand => AddBillEntry);
 dispatcher!("edit", EditCommand => EditEntry);
 dispatcher!("ls", ListAllBillCommand => ListAllBillEntry);
+
+#[completion(AddBillEntry)]
+fn comp_add(ctx: &ShellContext) -> Suggest {
+    if ctx.filling_argument_first(["-p", "--paid"]) {
+        return suggest!();
+    }
+
+    if ctx.filling_argument_first(["-r", "--reason"]) {
+        return suggest!();
+    }
+
+    if ctx.previous_word == "add" {
+        return name_suggest(vec![]);
+    }
+
+    let mut found_for_arg = false;
+    let mut typed_names = Vec::new();
+
+    // Collect all names that have already been typed after -f/--for
+    let mut i = 0;
+    while i < ctx.word_index {
+        if ctx.all_words[i] == "-f" || ctx.all_words[i] == "--for" {
+            // Start collecting names after this flag
+            let mut j = i + 1;
+            while j < ctx.word_index && !ctx.all_words[j].starts_with('-') {
+                typed_names.push(ctx.all_words[j].clone());
+                j += 1;
+            }
+            found_for_arg = true;
+        }
+        i += 1;
+    }
+
+    if found_for_arg {
+        return name_suggest(typed_names);
+    }
+
+    if ctx.typing_argument() {
+        return suggest! {
+            "-p" : "Payment amount",
+            "--paid" : "Payment amount",
+            "-r" : "Payment reason",
+            "--reason" : "Payment reason",
+            "-f" : "Who to pay for",
+            "--for" : "Who to pay for",
+        }
+        .strip_typed_argument(ctx);
+    }
+    suggest!()
+}
+
+fn name_suggest(typed: Vec<String>) -> Suggest {
+    let members = read_bills().get_members();
+    let mut suggest = Suggest::new();
+    for member in members {
+        if !typed.contains(&member) {
+            suggest.insert(SuggestItem::Simple(member));
+        }
+    }
+    return suggest;
+}
+
+#[completion(ListAllBillEntry)]
+fn comp_ls(ctx: &ShellContext) -> Suggest {
+    if ctx.typing_argument() {
+        return suggest! {
+            "-O": "Output the bill optimized to the simplest result",
+            "--optimize": "Output the bill optimized to the simplest result"
+        };
+    }
+    suggest!()
+}
+
+#[completion(EditEntry)]
+fn comp_edit(ctx: &ShellContext) -> Suggest {
+    if ctx.filling_argument_first(["-e", "--editor"]) {
+        let mut suggest = Suggest::new();
+        for editor in ["vi", "vim", "nvim", "helix", "nano"] {
+            suggest.insert(SuggestItem::Simple(editor.to_string()));
+        }
+        return suggest;
+    }
+    if ctx.typing_argument() {
+        return suggest! {
+            "-e": "Specify editor to use",
+            "--editor": "Specify editor to use"
+        }
+        .strip_typed_argument(ctx);
+    }
+    suggest!()
+}
 
 #[chain]
 async fn do_clear_cmd(_prev: ClearAllBillEntry) -> NextProcess {
@@ -143,7 +234,7 @@ fn render_bills(prev: ResultBills) {
 fn render_split_result(prev: ResultSplitResult) {
     let mut table = SimpleTable::new(string_vec!["Who", "|", "Should Pay", "|", "To"]);
     for ((who, to), paid) in prev.inner.final_result {
-        table.push_item(string_vec![who, "|", paid, "|", to]);
+        table.push_item(string_vec![who, "->", paid, "->", to]);
     }
     r_println!("{}", table)
 }
