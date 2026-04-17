@@ -1,7 +1,7 @@
 use std::{fs::create_dir_all, io::ErrorKind, path::PathBuf, process::exit};
 
 use mingling::{
-    AnyOutput, Groupped, ShellContext, Suggest, SuggestItem,
+    Groupped, ShellContext, Suggest, SuggestItem,
     macros::{chain, completion, dispatcher, gen_program, pack, r_println, renderer, suggest},
     marker::NextProcess,
     parser::Picker,
@@ -195,8 +195,7 @@ async fn parse_add_cmd(prev: AddBillEntry) -> NextProcess {
                 paid,
                 split: for_members.iter().map(|i| i.as_str().into()).collect(),
             };
-            let state = StateAddBillItem::new(bill_item);
-            AnyOutput::new(state).route_chain()
+            StateAddBillItem::new(bill_item).into()
         }
         Err(e) => e,
     }
@@ -226,8 +225,7 @@ async fn parse_ls_cmd(prev: ListAllBillEntry) -> NextProcess {
         .pick::<bool>(["-O", "--optimize"])
         .unpack_directly()
         .0;
-    let state = StateListBills { optimize };
-    AnyOutput::new(state).route_chain()
+    StateListBills { optimize }.into()
 }
 
 #[chain]
@@ -235,17 +233,15 @@ async fn handle_list_bills(prev: StateListBills) -> NextProcess {
     if prev.optimize {
         let bills = read_bills();
         match calculate_from(bills) {
-            Ok(r) => AnyOutput::new(ResultSplitResult::new(r)).route_renderer(),
+            Ok(r) => ResultSplitResult::new(r).to_render(),
             Err(BillSplitError::DuplicateSplitMembers) => {
-                AnyOutput::new(ErrorDuplicateSplitMembers::new(())).route_renderer()
+                ErrorDuplicateSplitMembers::new(()).to_render()
             }
-            Err(BillSplitError::NegativePaidAmount) => {
-                AnyOutput::new(ErrorNegativePaidAmount::new(())).route_renderer()
-            }
+            Err(BillSplitError::NegativePaidAmount) => ErrorNegativePaidAmount::new(()).to_render(),
         }
     } else {
         let bills = read_bills();
-        AnyOutput::new(ResultBills::new(bills)).route_renderer()
+        ResultBills::new(bills).to_render()
     }
 }
 
@@ -273,7 +269,7 @@ async fn parse_edit_cmd(prev: EditEntry) -> NextProcess {
         .unpack_directly()
         .0;
     let state = StateEditBills::new(editor);
-    AnyOutput::new(state).route_chain()
+    state.to_render()
 }
 
 #[chain]
@@ -287,7 +283,7 @@ async fn exec_edit_cmd(prev: StateEditBills) -> NextProcess {
         Ok(v) => v,
         Err(e) => match e.kind() {
             ErrorKind::NotFound => {
-                return AnyOutput::new(ErrorEditorNotFound::new(prev.inner)).route_renderer();
+                return ErrorEditorNotFound::new(prev.inner).to_render();
             }
             _ => panic!("Error editing bills: {}", e),
         },
