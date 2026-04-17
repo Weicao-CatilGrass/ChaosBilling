@@ -33,9 +33,9 @@ impl From<&str> for Who {
     }
 }
 
-impl Into<String> for Who {
-    fn into(self) -> String {
-        self.name
+impl From<Who> for String {
+    fn from(val: Who) -> Self {
+        val.name
     }
 }
 

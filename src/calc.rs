@@ -27,7 +27,7 @@ pub fn calculate_from(item: Bills) -> Result<SplitResult, BillSplitError> {
 }
 
 fn precheck(item: &Bills) -> Result<(), BillSplitError> {
-    for (_, bill_item) in &item.items {
+    for bill_item in item.items.values() {
         // Check if the paid amount is negative
         if bill_item.paid < 0.0 {
             return Err(BillSplitError::NegativePaidAmount);
@@ -44,16 +44,14 @@ fn precheck(item: &Bills) -> Result<(), BillSplitError> {
     Ok(())
 }
 
-fn calculate_balances_and_transactions(
-    item: &Bills,
-) -> (
-    BTreeMap<(Who, Who), f64>,
-    BTreeMap<Who, Vec<SplitResultItem>>,
-) {
+type DirectTransactions = BTreeMap<(Who, Who), f64>;
+type ItemsByWho = BTreeMap<Who, Vec<SplitResultItem>>;
+
+fn calculate_balances_and_transactions(item: &Bills) -> (DirectTransactions, ItemsByWho) {
     let mut direct_transactions: BTreeMap<(Who, Who), f64> = BTreeMap::new();
     let mut items: BTreeMap<Who, Vec<SplitResultItem>> = BTreeMap::new();
 
-    for (_, bill_item) in &item.items {
+    for bill_item in item.items.values() {
         let who_paid = &bill_item.who_paid;
         let paid = bill_item.paid;
         let split_count = bill_item.split.len() as f64;
@@ -82,7 +80,7 @@ fn calculate_balances_and_transactions(
 
                 items
                     .entry(person.clone())
-                    .or_insert_with(Vec::new)
+                    .or_default()
                     .push(bill_result_item);
             }
         }

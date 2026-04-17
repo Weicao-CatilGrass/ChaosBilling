@@ -62,8 +62,10 @@ impl Bills {
 
     /// Update the bill item with the specified ID
     pub fn update_item(&mut self, id: &Uuid, item: BillItem) -> bool {
-        if self.items.contains_key(&id.to_string()) {
-            self.items.insert(id.to_string(), item);
+        if let std::collections::btree_map::Entry::Occupied(mut e) =
+            self.items.entry(id.to_string())
+        {
+            e.insert(item);
             true
         } else {
             false
@@ -100,10 +102,7 @@ impl SplitResult {
             reason,
         };
 
-        self.items
-            .entry(payer)
-            .or_insert_with(Vec::new)
-            .push(result_item);
+        self.items.entry(payer).or_default().push(result_item);
     }
 
     /// Get all bill items for a specified payer (immutable reference)

@@ -122,7 +122,7 @@ fn name_suggest(typed: Vec<String>) -> Suggest {
             suggest.insert(SuggestItem::Simple(member));
         }
     }
-    return suggest;
+    suggest
 }
 
 #[completion(ListAllBillEntry)]
@@ -353,10 +353,7 @@ fn read_bills() -> Bills {
     let state_file = state_file_path();
     if state_file.exists() {
         match std::fs::read_to_string(&state_file) {
-            Ok(contents) => match serde_yaml::from_str(&contents) {
-                Ok(bills) => bills,
-                Err(_) => Bills::default(),
-            },
+            Ok(contents) => serde_yaml::from_str(&contents).unwrap_or_default(),
             Err(_) => Bills::default(),
         }
     } else {
