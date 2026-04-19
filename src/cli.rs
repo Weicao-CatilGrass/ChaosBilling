@@ -225,7 +225,7 @@ fn parse_ls_cmd(prev: ListAllBillEntry) -> NextProcess {
         .pick::<bool>(["-O", "--optimize"])
         .unpack_directly()
         .0;
-    StateListBills { optimize }.into()
+    StateListBills { optimize }
 }
 
 #[chain]
@@ -377,27 +377,27 @@ dispatcher!("nano", EditWithNanoCommand => EditWithNanoEntry);
 
 #[chain]
 fn edit_with_vi(_prev: EditWithViEntry) -> NextProcess {
-    EditEntry::new(string_vec!["-e", "vi"]).to_chain()
+    EditEntry::new(string_vec!["-e", "vi"])
 }
 
 #[chain]
 fn edit_with_vim(_prev: EditWithVimEntry) -> NextProcess {
-    EditEntry::new(string_vec!["-e", "vim"]).to_chain()
+    EditEntry::new(string_vec!["-e", "vim"])
 }
 
 #[chain]
 fn edit_with_nvim(_prev: EditWithNvimEntry) -> NextProcess {
-    EditEntry::new(string_vec!["-e", "nvim"]).to_chain()
+    EditEntry::new(string_vec!["-e", "nvim"])
 }
 
 #[chain]
 fn edit_with_helix(_prev: EditWithHelixEntry) -> NextProcess {
-    EditEntry::new(string_vec!["-e", "helix"]).to_chain()
+    EditEntry::new(string_vec!["-e", "helix"])
 }
 
 #[chain]
 fn edit_with_nano(_prev: EditWithNanoEntry) -> NextProcess {
-    EditEntry::new(string_vec!["-e", "nano"]).to_chain()
+    EditEntry::new(string_vec!["-e", "nano"])
 }
 
 #[renderer]
