@@ -10,7 +10,6 @@ mod who;
 #[cfg(test)]
 mod test;
 
-#[tokio::main]
-async fn main() {
-    cli::entry().await
+fn main() {
+    cli::entry()
 }

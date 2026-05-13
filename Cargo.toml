@@ -1,5 +1,5 @@
 [package]
-name = "cobill" # chaos_billing
+name = "cobill"   # chaos_billing
 version = "0.1.0"
 edition = "2024"
 
@@ -8,14 +8,17 @@ name = "cobill"
 path = "src/main.rs"
 
 [dependencies]
-mingling = { path = "../mingling/mingling", features = ["full", "debug"] }
-tokio = { version = "1", features = ["macros", "rt", "rt-multi-thread" ] }
+mingling = { path = "../mingling/mingling", features = [
+    "parser",
+    "general_renderer",
+    "comp",
+] }
 uuid = { version = "1", features = ["v4"] }
 serde = { version = "1", features = ["derive"] }
 serde_yaml = "0.9.33"
 strip-ansi-escapes = "0.2.1"
-thiserror = "1.0.69"
+thiserror = "2.0.18"
 dirs = "6"
 
 [build-dependencies]
-mingling = { path = "../mingling/mingling", features = ["comp"] }
+mingling = { path = "../mingling/mingling", features = ["builds", "comp"] }

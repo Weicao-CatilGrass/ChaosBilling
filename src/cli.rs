@@ -3,7 +3,6 @@ use std::{fs::create_dir_all, io::ErrorKind, path::PathBuf, process::exit};
 use mingling::{
     AnyOutput, Groupped, ShellContext, Suggest, SuggestItem,
     macros::{chain, completion, dispatcher, gen_program, pack, r_println, renderer, suggest},
-    marker::NextProcess,
     parser::Picker,
     setup::GeneralRendererSetup,
 };
@@ -18,7 +17,7 @@ use crate::{
     string_vec,
 };
 
-pub async fn entry() {
+pub fn entry() {
     let mut program = ThisProgram::new();
 
     if program.pick_global_flag(["-v", "--version"]) {
@@ -55,7 +54,7 @@ pub async fn entry() {
     ));
 
     // Execute
-    program.exec().await;
+    program.exec();
 }
 
 dispatcher!("clear", ClearAllBillCommand => ClearAllBillEntry);
@@ -156,7 +155,7 @@ fn comp_edit(ctx: &ShellContext) -> Suggest {
 }
 
 #[chain]
-async fn do_clear_cmd(_prev: ClearAllBillEntry) -> NextProcess {
+fn do_clear_cmd(_prev: ClearAllBillEntry) -> NextProcess {
     op_bills(|b| b.clear_items());
     Empty::new(()).to_render()
 }
@@ -164,7 +163,7 @@ async fn do_clear_cmd(_prev: ClearAllBillEntry) -> NextProcess {
 pack!(ResultCat = String);
 
 #[chain]
-async fn read_cat_cmd(_prev: CatEntry) -> NextProcess {
+fn read_cat_cmd(_prev: CatEntry) -> NextProcess {
     ResultCat::new(read_bills().table()).to_render()
 }
 
@@ -176,9 +175,9 @@ fn render_cat_result(prev: ResultCat) {
 pack!(StateAddBillItem = BillItem);
 
 #[chain]
-async fn parse_add_cmd(prev: AddBillEntry) -> NextProcess {
+fn parse_add_cmd(prev: AddBillEntry) -> NextProcess {
     let picked = Picker::new(prev.inner)
-        .pick_or_route::<f64>(["--paid", "-p"], PaidRequired::new(()).to_render())
+        .pick_or_route::<f64, _>(["--paid", "-p"], PaidRequired::new(()).to_render())
         .pick_or_route::<Vec<String>>(["--for", "-f"], ForMembersRequired::new(()).to_render())
         .pick_or::<String>(
             ["--reason", "-r", "--message", "-m"],
@@ -203,7 +202,7 @@ async fn parse_add_cmd(prev: AddBillEntry) -> NextProcess {
 }
 
 #[chain]
-async fn handle_add_bill_item(prev: StateAddBillItem) -> NextProcess {
+fn handle_add_bill_item(prev: StateAddBillItem) -> NextProcess {
     op_bills(|b| {
         b.add_item(prev.inner);
     });
@@ -221,17 +220,16 @@ pack!(ErrorDuplicateSplitMembers = ());
 pack!(ErrorNegativePaidAmount = ());
 
 #[chain]
-async fn parse_ls_cmd(prev: ListAllBillEntry) -> NextProcess {
-    let optimize = Picker::<()>::new(prev.inner)
+fn parse_ls_cmd(prev: ListAllBillEntry) -> NextProcess {
+    let optimize = Picker::new(prev.inner)
         .pick::<bool>(["-O", "--optimize"])
-        .unpack_directly()
-        .0;
+        .unpack();
     let state = StateListBills { optimize };
     AnyOutput::new(state).route_chain()
 }
 
 #[chain]
-async fn handle_list_bills(prev: StateListBills) -> NextProcess {
+fn handle_list_bills(prev: StateListBills) -> NextProcess {
     if prev.optimize {
         let bills = read_bills();
         match calculate_from(bills) {
@@ -267,17 +265,16 @@ pack!(StateEditBills = String); // Editor name
 pack!(ErrorEditorNotFound = String);
 
 #[chain]
-async fn parse_edit_cmd(prev: EditEntry) -> NextProcess {
-    let editor = Picker::<()>::new(prev.inner)
+fn parse_edit_cmd(prev: EditEntry) -> NextProcess {
+    let editor = Picker::new(prev.inner)
         .pick_or::<String>(["--editor", "-e"], get_default_editor())
-        .unpack_directly()
-        .0;
+        .unpack();
     let state = StateEditBills::new(editor);
     AnyOutput::new(state).route_chain()
 }
 
 #[chain]
-async fn exec_edit_cmd(prev: StateEditBills) -> NextProcess {
+fn exec_edit_cmd(prev: StateEditBills) -> NextProcess {
     let text = match input_with_editor_cutsom(
         read_bills().table(),
         state_edit_file_path(),
@@ -383,27 +380,27 @@ dispatcher!("helix", EditWithHelixCommand => EditWithHelixEntry);
 dispatcher!("nano", EditWithNanoCommand => EditWithNanoEntry);
 
 #[chain]
-async fn edit_with_vi(_prev: EditWithViEntry) -> NextProcess {
+fn edit_with_vi(_prev: EditWithViEntry) -> NextProcess {
     EditEntry::new(string_vec!["-e", "vi"]).to_chain()
 }
 
 #[chain]
-async fn edit_with_vim(_prev: EditWithVimEntry) -> NextProcess {
+fn edit_with_vim(_prev: EditWithVimEntry) -> NextProcess {
     EditEntry::new(string_vec!["-e", "vim"]).to_chain()
 }
 
 #[chain]
-async fn edit_with_nvim(_prev: EditWithNvimEntry) -> NextProcess {
+fn edit_with_nvim(_prev: EditWithNvimEntry) -> NextProcess {
     EditEntry::new(string_vec!["-e", "nvim"]).to_chain()
 }
 
 #[chain]
-async fn edit_with_helix(_prev: EditWithHelixEntry) -> NextProcess {
+fn edit_with_helix(_prev: EditWithHelixEntry) -> NextProcess {
     EditEntry::new(string_vec!["-e", "helix"]).to_chain()
 }
 
 #[chain]
-async fn edit_with_nano(_prev: EditWithNanoEntry) -> NextProcess {
+fn edit_with_nano(_prev: EditWithNanoEntry) -> NextProcess {
     EditEntry::new(string_vec!["-e", "nano"]).to_chain()
 }
 
